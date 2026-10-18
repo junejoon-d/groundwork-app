@@ -25,14 +25,20 @@ function block(msg) {
   process.exit(2);
 }
 
+// Windows ignores trailing dots and spaces, and ".env::$DATA" reads the file's main stream.
+function normalizeName(n) {
+  return path.basename(String(n).replace(/\\/g, "/")).replace(/:.*$/, "").replace(/[. ]+$/, "");
+}
+
 function isEnvFile(p) {
   if (!p) return false;
-  let s = String(p);
-  // Resolve symlinks and Windows short names when the file exists.
-  try { s = require("fs").realpathSync.native(s); } catch {}
-  // Windows ignores trailing dots and spaces, and ".env::$DATA" reads the file's main stream.
-  const base = path.basename(s.replace(/\\/g, "/")).replace(/:.*$/, "").replace(/[. ]+$/, "");
-  return ENV_FILE.test(base) && !ALLOWED_ENV.test(base);
+  // Check the name as given and, when the file exists, the real file behind any symlink.
+  const names = [String(p)];
+  try { names.push(require("fs").realpathSync.native(String(p))); } catch {}
+  return names.some((n) => {
+    const base = normalizeName(n);
+    return ENV_FILE.test(base) && !ALLOWED_ENV.test(base);
+  });
 }
 
 // A JWT whose payload says role=service_role is the legacy Supabase service-role key.
@@ -46,6 +52,34 @@ function hasServiceRoleJwt(text) {
       return false;
     }
   });
+}
+
+const ENV_NAMES = [".env", ".env.local", ".env.development", ".env.production", ".env.test"];
+
+// Does a glob such as .e*, *env*, .[e]nv or .{e,x}nv match a .env file name?
+function globCouldMatchEnv(glob, strict) {
+  if (!strict && !glob.startsWith(".")) return false;
+  let re = "^";
+  for (let i = 0; i < glob.length; i++) {
+    const c = glob[i];
+    if (c === "*") re += ".*";
+    else if (c === "?") re += ".";
+    else if (c === "[") {
+      const j = glob.indexOf("]", i + 1);
+      if (j < 0) { re += "\\["; continue; }
+      re += "[" + glob.slice(i + 1, j).replace(/^!/, "^").replace(/\\/g, "\\\\") + "]";
+      i = j;
+    } else if (c === "{") re += "(";
+    else if (c === "}") re += ")";
+    else if (c === ",") re += "|";
+    else re += c.replace(/[.+^$()|\\]/g, "\\$&");
+  }
+  try {
+    const r = new RegExp(re + "$", "i");
+    return ENV_NAMES.some((n) => r.test(n));
+  } catch {
+    return true;
+  }
 }
 
 function checkContent(text, filePath) {
@@ -92,14 +126,18 @@ process.stdin.on("end", () => {
     // escapes and PowerShell backticks dropped (.e"nv", .e\nv, .e`nv all read as .env).
     const readings = [raw.replace(/\\/g, "/"), raw.replace(/['"`\\]/g, "")];
     for (const cmd of readings) {
-      // A dotfile glob such as .e*, .en?, .[e]nv or .* could expand to .env.
-      if (/(^|[\s'"=<>|;&(\/])\.(e[\w.-]*)?[*?[{]/i.test(cmd)) {
-        block("shell commands may not use a dotfile glob that could match .env. Name the file you need.");
+      // Any wildcard word that could expand to a .env file. Shells skip dotfiles for a leading
+      // wildcard, but find -name, PowerShell and dotglob don't, so those are checked strictly.
+      const strict = tool === "PowerShell" || /\b(dotglob|GLOBIGNORE|find|pwsh|powershell|Get-\w+|gci|gc|dir|ls\s+-\S*a)\b/i.test(cmd);
+      for (const word of cmd.split(/[\s=<>|;&()'"`]+/)) {
+        if (/[*?[{]/.test(word) && globCouldMatchEnv(word.split("/").pop(), strict)) {
+          block("shell commands may not use a wildcard that could match a .env file. Name the file you need.");
+        }
       }
-      // A .env path as its own word: not process.env, not .env.example.
-      const envRef = /(^|[\s'"=<>|;&(\/])\.env(\.[A-Za-z0-9_-]+)?(?=$|[\s'"|;&)])/gi;
+      // A .env path as its own word, normalized like a Windows file name: not process.env, not .env.example.
+      const envRef = /(^|[\s'"=<>|;&(\/,`{])(\.env(\.[A-Za-z0-9_-]+)?[. ]*(:[^\s'"|;&)]*)?)(?=$|[\s'"|;&)<>,`}])/gi;
       for (const m of cmd.matchAll(envRef)) {
-        if (!ALLOWED_ENV.test(m[0].trim().replace(/^['"=<>|;&(\/]/, ""))) {
+        if (!ALLOWED_ENV.test(normalizeName(m[2]))) {
           block("shell commands may not touch .env files. Refer to variables by name.");
         }
       }
