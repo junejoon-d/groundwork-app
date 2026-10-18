@@ -59,7 +59,7 @@ const ENV_NAMES = [".env", ".env.local", ".env.development", ".env.production", 
 // Could a wildcard such as *env*, *v or *.e* match a .env file name? Used where a leading
 // wildcard also matches dotfiles. Anything this translator can't read exactly counts as a match.
 function globCouldMatchEnv(glob) {
-  if (/[@+!]\(|\[[!^]?\]|\[:|\\/.test(glob)) return true;
+  if (/[@+!*?]\(|\[[!^]?\]|\[:|\\/.test(glob)) return true;
   let re = "^";
   for (let i = 0; i < glob.length; i++) {
     const c = glob[i];
@@ -131,10 +131,11 @@ process.stdin.on("end", () => {
       // wildcard, but find -name, PowerShell and dotglob don't, so those are checked strictly.
       const strict = tool === "PowerShell" || /\b(dotglob|GLOBIGNORE|find|pwsh|powershell|Get-\w+|gci|gc|dir|ls\s+-\S*a)\b/i.test(cmd);
       for (const word of cmd.split(/[\s=<>|;&'"`]+/)) {
-        const last = word.split("/").pop().replace(/^[(]+/, "");
-        // Fail closed: any dot-word with glob or extglob syntax (.e*, .[e]nv, .@(env), .{e,}nv).
-        const dotGlob = last.startsWith(".") && /[*?[{]|[@+!]\(/.test(last);
-        if (dotGlob || (strict && /[*?[{]|[@+!]\(/.test(last) && globCouldMatchEnv(last))) {
+        const last = word.split("/").pop();
+        // Fail closed: a dotfile name anywhere in the word (start, after / ( { , |) whose own
+        // path segment carries glob, brace or extglob syntax: .e*, {x,.e*}, @(.e*), {.e,}nv.
+        const dotGlob = /(^|[({,|\/])\.(?![\/.])[^\/\s]*?([*?[{},]|[@+!*?]\()/.test(word);
+        if (dotGlob || (strict && /[*?[{]|[@+!*?]\(/.test(last) && globCouldMatchEnv(last))) {
           block("shell commands may not use a wildcard that could match a .env file. Name the file you need.");
         }
       }
