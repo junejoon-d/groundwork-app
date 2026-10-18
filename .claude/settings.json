@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "defaultMode": "plan",
+    "deny": [
+      "Read(.env)",
+      "Read(.env.*)",
+      "Edit(.env)",
+      "Edit(.env.*)"
+    ]
+  },
+  "enabledPlugins": {
+    "claude-security@claude-plugins-official": true,
+    "security-guidance@claude-plugins-official": true
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Read|Edit|Write|MultiEdit|NotebookEdit|Grep|Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/guard-secrets.js"],
+            "onFailure": "block"
+          }
+        ]
+      }
+    ]
+  }
+}
