@@ -8,7 +8,7 @@
 - Before marking any phase done, commit the work, run `/claude-security scan my branch`, and fix every confirmed finding. Paste the result into the phase summary next to the §12 security tests.
 
 ## Database
-- Use the Supabase MCP against the dev project only. Details: `.claude/rules/supabase.md`.
+- The Supabase MCP is read-only. Schema changes are migration files that reach production only when their PR merges. Details: `.claude/rules/supabase.md`.
 
 ## How we work
 - Each session starts in plan mode. For a new phase, interview me with AskUserQuestion before writing the plan, then wait for my approval.
