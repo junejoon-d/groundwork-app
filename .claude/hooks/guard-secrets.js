@@ -27,7 +27,11 @@ function block(msg) {
 
 function isEnvFile(p) {
   if (!p) return false;
-  const base = path.basename(String(p).replace(/\\/g, "/"));
+  let s = String(p);
+  // Resolve symlinks and Windows short names when the file exists.
+  try { s = require("fs").realpathSync.native(s); } catch {}
+  // Windows ignores trailing dots and spaces, and ".env::$DATA" reads the file's main stream.
+  const base = path.basename(s.replace(/\\/g, "/")).replace(/:.*$/, "").replace(/[. ]+$/, "");
   return ENV_FILE.test(base) && !ALLOWED_ENV.test(base);
 }
 
@@ -83,14 +87,24 @@ process.stdin.on("end", () => {
   if (tool === "NotebookEdit") checkContent(ti.new_source, filePath);
 
   if (tool === "Bash" || tool === "PowerShell") {
-    const cmd = String(ti.command || "");
-    // A .env path as its own word: not process.env, not .env.example.
-    const envRef = /(^|[\s'"=<>|;&(\/\\])\.env(\.[A-Za-z0-9_-]+)?(?=$|[\s'"|;&)])/g;
-    for (const m of cmd.matchAll(envRef)) {
-      if (!ALLOWED_ENV.test(m[0].trim().replace(/^['"=<>|;&(\/\\]/, ""))) {
-        block("shell commands may not touch .env files. Refer to variables by name.");
+    const raw = String(ti.command || "");
+    // Two readings: backslashes as path separators (C:\app\.env), and with quotes,
+    // escapes and PowerShell backticks dropped (.e"nv", .e\nv, .e`nv all read as .env).
+    const readings = [raw.replace(/\\/g, "/"), raw.replace(/['"`\\]/g, "")];
+    for (const cmd of readings) {
+      // A dotfile glob such as .e*, .en?, .[e]nv or .* could expand to .env.
+      if (/(^|[\s'"=<>|;&(\/])\.(e[\w.-]*)?[*?[{]/i.test(cmd)) {
+        block("shell commands may not use a dotfile glob that could match .env. Name the file you need.");
+      }
+      // A .env path as its own word: not process.env, not .env.example.
+      const envRef = /(^|[\s'"=<>|;&(\/])\.env(\.[A-Za-z0-9_-]+)?(?=$|[\s'"|;&)])/gi;
+      for (const m of cmd.matchAll(envRef)) {
+        if (!ALLOWED_ENV.test(m[0].trim().replace(/^['"=<>|;&(\/]/, ""))) {
+          block("shell commands may not touch .env files. Refer to variables by name.");
+        }
       }
     }
+    const cmd = raw;
     checkContent(cmd, "a shell command");
   }
   process.exit(0);
