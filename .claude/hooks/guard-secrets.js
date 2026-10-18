@@ -56,9 +56,10 @@ function hasServiceRoleJwt(text) {
 
 const ENV_NAMES = [".env", ".env.local", ".env.development", ".env.production", ".env.test"];
 
-// Does a glob such as .e*, *env*, .[e]nv or .{e,x}nv match a .env file name?
-function globCouldMatchEnv(glob, strict) {
-  if (!strict && !glob.startsWith(".")) return false;
+// Could a wildcard such as *env*, *v or *.e* match a .env file name? Used where a leading
+// wildcard also matches dotfiles. Anything this translator can't read exactly counts as a match.
+function globCouldMatchEnv(glob) {
+  if (/[@+!]\(|\[[!^]?\]|\[:|\\/.test(glob)) return true;
   let re = "^";
   for (let i = 0; i < glob.length; i++) {
     const c = glob[i];
@@ -66,13 +67,13 @@ function globCouldMatchEnv(glob, strict) {
     else if (c === "?") re += ".";
     else if (c === "[") {
       const j = glob.indexOf("]", i + 1);
-      if (j < 0) { re += "\\["; continue; }
-      re += "[" + glob.slice(i + 1, j).replace(/^!/, "^").replace(/\\/g, "\\\\") + "]";
+      if (j < 0) return true;
+      re += "[" + glob.slice(i + 1, j).replace(/^!/, "^") + "]";
       i = j;
     } else if (c === "{") re += "(";
     else if (c === "}") re += ")";
     else if (c === ",") re += "|";
-    else re += c.replace(/[.+^$()|\\]/g, "\\$&");
+    else re += c.replace(/[.+^$()|\]\\]/g, "\\$&");
   }
   try {
     const r = new RegExp(re + "$", "i");
@@ -129,8 +130,11 @@ process.stdin.on("end", () => {
       // Any wildcard word that could expand to a .env file. Shells skip dotfiles for a leading
       // wildcard, but find -name, PowerShell and dotglob don't, so those are checked strictly.
       const strict = tool === "PowerShell" || /\b(dotglob|GLOBIGNORE|find|pwsh|powershell|Get-\w+|gci|gc|dir|ls\s+-\S*a)\b/i.test(cmd);
-      for (const word of cmd.split(/[\s=<>|;&()'"`]+/)) {
-        if (/[*?[{]/.test(word) && globCouldMatchEnv(word.split("/").pop(), strict)) {
+      for (const word of cmd.split(/[\s=<>|;&'"`]+/)) {
+        const last = word.split("/").pop().replace(/^[(]+/, "");
+        // Fail closed: any dot-word with glob or extglob syntax (.e*, .[e]nv, .@(env), .{e,}nv).
+        const dotGlob = last.startsWith(".") && /[*?[{]|[@+!]\(/.test(last);
+        if (dotGlob || (strict && /[*?[{]|[@+!]\(/.test(last) && globCouldMatchEnv(last))) {
           block("shell commands may not use a wildcard that could match a .env file. Name the file you need.");
         }
       }
