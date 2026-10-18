@@ -135,7 +135,10 @@ process.stdin.on("end", () => {
         // Fail closed: a dotfile name anywhere in the word (start, after / ( { , |) whose own
         // path segment carries glob, brace or extglob syntax: .e*, {x,.e*}, @(.e*), {.e,}nv.
         const dotGlob = /(^|[({,|\/])\.(?![\/.])[^\/\s]*?([*?[{},]|[@+!*?]\()/.test(word);
-        if (dotGlob || (strict && /[*?[{]|[@+!*?]\(/.test(last) && globCouldMatchEnv(last))) {
+        // Also fail closed on any word with a dot plus an extglob group or a brace list or range,
+        // since those can assemble .env from pieces: @(.e|x)nv, {.e..}nv.
+        const dotGroup = word.includes(".") && /[@+!*?]\(|\{[^}]*(,|\.\.)[^}]*\}/.test(word);
+        if (dotGlob || dotGroup || (strict && /[*?[{]|[@+!*?]\(/.test(last) && globCouldMatchEnv(last))) {
           block("shell commands may not use a wildcard that could match a .env file. Name the file you need.");
         }
       }
