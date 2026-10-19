@@ -23,7 +23,7 @@ How this repo is set up for Claude Code. All files below are already in place; t
 
 ## Finish setup (about 10 minutes, once)
 1. Paste the CLAUDE.md from build brief §11 at the top of `CLAUDE.md`, above the rules already there.
-2. Bring the live database into the repo before the first PR that touches `supabase/` (see the next section).
+2. Before the baseline PR merges, run the one line of SQL in the next section.
 3. `.gitignore` already ignores `.env` and `.env.*` (but keeps `.env.example`). Leave that in place.
 4. Start Claude Code in the repo. When it asks to trust the project's plugins and MCP server, approve them. If the plugins don't install by themselves, run:
    ```
@@ -34,35 +34,19 @@ How this repo is set up for Claude Code. All files below are already in place; t
 5. Fill in the TODO values in `src/theme/tokens.ts` from the Harbor doc before phase 3.
 6. Check that the hook works: ask Claude "show me what's in .env". It should refuse with a `Blocked by guard-secrets` message. Run `/hooks` to see the hook listed.
 
-## Bring the live database into the repo (once)
-Supabase's GitHub integration is on. A PR that changes `supabase/` gets a preview branch built from the repo's migrations, and merging to `main` applies them to groundwork-pilot. Right now the repo has none of the database: groundwork-pilot has 52 tables, but only the research tables came from a recorded migration, and its 9 Edge Functions aren't in the repo. Until this is fixed, preview branches start empty and the first new migration will fail on them.
+## The live database in the repo
+Supabase's GitHub integration is on. A PR that changes `supabase/` gets a preview branch built from the repo's migrations, and merging to `main` applies new migrations to groundwork-pilot.
 
-On your Windows machine, with Docker Desktop running and the Supabase CLI installed, from the repo root on a new branch:
-```
-supabase init
-supabase login
-supabase link --project-ref klpszhgfvibojttmtbik
-supabase migration repair --status reverted 20261018014442
-supabase db pull
-supabase functions download stream-chat
-```
-Repeat the last line for `invite-guardian`, `guardian-sms-optin`, `spike-webhook`, `spike-connect`, `push-send`, `identity-start`, `stripe-webhook` and `account-erase`.
+`supabase/migrations/20261018014441_remote_schema.sql` is the baseline: every table, function, policy, trigger, grant and the storage bucket that production had on 2026-10-19, generated from the live catalog without Docker. `20261018014442_research_reference_tables.sql` is the one migration production recorded, copied verbatim. `supabase/functions/` holds the source of all 9 deployed Edge Functions, and `supabase/config.toml` keeps JWT checks off for the five webhook functions.
 
-- `migration repair` only removes the one history row for the research tables; it doesn't change any table. `db pull` then writes the whole schema, research tables included, into one `<timestamp>_remote_schema.sql` and records it as applied, so production won't run it again.
-- Add this to `supabase/config.toml` so deploys from the repo keep the webhooks reachable. Production has JWT checks off for exactly these five:
-  ```toml
-  [functions.stripe-webhook]
-  verify_jwt = false
-  [functions.spike-webhook]
-  verify_jwt = false
-  [functions.push-send]
-  verify_jwt = false
-  [functions.account-erase]
-  verify_jwt = false
-  [functions.guardian-sms-optin]
-  verify_jwt = false
-  ```
-- Open a PR. Its preview branch should build green, which shows the baseline replays cleanly.
+Production must never run the baseline. Before the baseline PR merges, run this once in the dashboard SQL editor so the integration treats it as already applied:
+```sql
+insert into supabase_migrations.schema_migrations (version, name) values ('20261018014441', 'remote_schema');
+```
+
+What the baseline leaves out on purpose: the pg_cron jobs (listed in the file's header), Vault secret values, and default privileges (preview branches already have Supabase's defaults).
+
+From here on, every schema change is a new file from `supabase migration new <name>`, reviewed on its preview branch.
 
 ## Notes
 - Claude Security needs a paid plan. On Pro, turn on "Dynamic workflows" in `/config`. It scans committed code, so commit before running `/claude-security scan my branch`.
