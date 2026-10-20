@@ -37,6 +37,5 @@ Rejected:
 - Claude-Mem (built-in memory covers it), long "install these plugins" lists, Composio-style all-in-one connectors.
 - Context7 was the one third-party pick aimed at a real pain point (current Expo/Supabase docs); not installed.
 
-## Danny still has to
-- Paste the CLAUDE.md block from build brief §11 above the rules already in `CLAUDE.md`.
-- Fill the Harbor TODOs in `tokens.ts`.
+## Two copies of this setup
+The local app repo `C:\dev\groundwork` merged the same kit on 2026-10-19 (see its decisions log): plan mode, the secrets deny rules, `claude-security`, its own `guard-secrets.js` with a self-test, and the same three rules. It left out `security-guidance` (not installed). Its CLAUDE.md already carries the brief's rules, so nothing needs pasting there.

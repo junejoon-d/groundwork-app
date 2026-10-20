@@ -4,31 +4,27 @@
 | Item | Needed by | Notes |
 |---|---|---|
 | Pick the new app name | before store listing, domains, branding | Ranking: Regulars, Stayer, Mooring, Standfast, Staunch (`09-naming.md`) |
-| `danger` and `warn` color tokens | before phase 3 | Harbor has none; don't reuse coral |
-| Harbor light-mode TODOs, type scale, spacing, radius | before phase 3 | From the Harbor .docx |
 | Whether to add a fuller parental-notification flow | before minor features ship | Suggested as an eighth §14 decision |
 | Outsourced moderation vendor and trigger point | when report volume grows | Deliberately deferred |
 | Iconography and motion defaults | before UI phases | Recommended in the Harbor doc, not decided |
 | Fix the pre-existing Supabase advisor warnings | before real users | 95 SECURITY DEFINER functions callable by signed-in users, 8 RLS tables without policies, leaked-password protection off |
 
-## Danny's to-dos
-- Add the Build Brief .docx, the Harbor .docx and the legal drafts to the repo (for example under `docs/`), so build sessions can read them. These handoff notes don't replace the brief.
-- Paste the brief §11 CLAUDE.md block above the rules in `CLAUDE.md`.
-- Reconnect the Stripe connector on claude.ai (its sign-in expired).
-- Spike sales call: ask first whether there's a sandbox, then pricing and lead time.
-- Recruit one Garmin-wearing beta tester (DC Triathlon Club) at the start of phase 9.
-- Start the insurance broker conversation early (weeks of underwriting).
-- Attorney: legal drafts, minor P2P matching, consent mechanism, guardian visibility, COPPA posture, state app-store laws, and a full trademark search on the chosen name.
-- Form the Virginia LLC.
+## Two repos, one production database (most urgent)
+- `C:\dev\groundwork` (local, no GitHub remote) holds the app and numbered migrations `0001`–`0049`, applied by its own runner.
+- `junejoon-d/groundwork-app` (GitHub) holds a baseline generated from production plus PR #6, and its Supabase GitHub integration redeploys Edge Functions on every merge to `main`.
+- Production's migration history lists only the GitHub track (checked 2026-10-20: `remote_schema`, `research_reference_tables`, `guardian_email_sends_and_photo_paths`). Local `0049_reference_tables_grants` (closes the research tables to clients) isn't recorded there.
+- A merge on either side can overwrite the other's functions or schema. Pick one repo as the source of truth before more backend changes.
 
-## Build work that is specified but not built yet
-- Store age signals (Apple Declared Age Range, Google Play Age Signals) at signup and every launch. Needs a native module or config plugin; no Expo wrapper found.
-- `RESCIND_CONSENT` webhook and Play approval-status checks; a significant-change checklist for releases.
-- TAKE IT DOWN report-and-takedown flow (48 hours).
-- The §15.9 single match gate and test S32 (direct `matches` insert refused).
-- Replace seed `venues` with a licensed Places API before launch.
-- Spike webhook: idempotency, async processing, periodic reconciliation (events are dropped after ~4 days of failed retries).
-- The "request sent, waiting" screen (no reference app has one).
+## Danny's to-dos
+- Decide the source-of-truth repo (above).
+- The legal drafts weren't found; the app's privacy, terms and SMS pages need a lawyer's read anyway.
+- Reconnect the Stripe connector on claude.ai (its sign-in expired).
+- Everything in `C:\dev\groundwork\docs\launch-checklist.md` marked "you" (Spike credentials and a Garmin tester, Stripe live mode after the LLC, Apple, a domain for SendGrid, Supabase Pro, phone sign-in decision).
+- Attorney: legal pages, minor P2P matching, consent mechanism, guardian visibility, COPPA posture, state app-store laws, and a full trademark search on the chosen name.
+- Start the insurance broker conversation early.
+
+## Build state
+What's built and what's left is tracked in `C:\dev\groundwork\docs\launch-checklist.md` and `decisions.md`, not here. Items from the research that may not be in it yet: store age signals (Apple Declared Age Range, Google Play Age Signals), a `RESCIND_CONSENT` webhook, a significant-change checklist for the stores, and a TAKE IT DOWN takedown flow.
 
 ## Research gaps
 - Utah's App Store Act date conflicts (6 May 2027 vs 2026); read HB 498.
