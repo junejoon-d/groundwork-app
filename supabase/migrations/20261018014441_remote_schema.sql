@@ -20,19 +20,13 @@
 set check_function_bodies = false;
 
 create schema if not exists private;
-
 grant usage on schema private to authenticated;
 
 create extension if not exists pgcrypto with schema extensions;
-
 create extension if not exists "uuid-ossp" with schema extensions;
-
 create extension if not exists pg_stat_statements with schema extensions;
-
 create extension if not exists postgis with schema extensions;
-
 create extension if not exists pg_net with schema extensions;
-
 create extension if not exists pg_cron with schema pg_catalog;
 
 -- ======================================================================
