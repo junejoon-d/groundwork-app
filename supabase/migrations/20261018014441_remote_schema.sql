@@ -19,6 +19,13 @@
 
 set check_function_bodies = false;
 
+-- The compliance role that trust-and-safety policies are granted to. No login; nobody is a member yet.
+do $$ begin
+  if not exists (select 1 from pg_roles where rolname = 'trust_and_safety') then
+    create role trust_and_safety nologin;
+  end if;
+end $$;
+
 create schema if not exists private;
 grant usage on schema private to authenticated;
 
