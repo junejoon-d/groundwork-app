@@ -1,5 +1,8 @@
 # Supabase backend
 
+## Read first: two repos touch this database
+The app's own repo, `C:\dev\groundwork` (local, no GitHub remote), has migrations `0001`–`0049` applied by its own runner and its own copies of the Edge Functions. This GitHub repo has a baseline generated from production plus PR #6. Production's migration history (checked 2026-10-20) lists only this repo's three versions; local `0049_reference_tables_grants` isn't recorded. A merge here redeploys functions over whatever the local repo deployed, and the reverse. Settle which repo is the source of truth before more backend changes (`10-open-items.md`).
+
 ## The project
 - **groundwork-pilot** (ref `klpszhgfvibojttmtbik`) is the only Supabase project, so **it is production**.
 - **GitHub integration is on.** Merging to `main` of `junejoon-d/groundwork-app` applies new migrations and redeploys the functions listed in `supabase/config.toml`.

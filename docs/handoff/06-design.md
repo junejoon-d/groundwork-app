@@ -10,11 +10,10 @@ Replaces brief §10 wholesale. The values live in `src/theme/tokens.ts`; the rul
 - **Contrast fix adopted:** `onAccent` uses ink labels on coral buttons in light mode. Card-colored labels measure 3.08:1 and fail AA.
 - Other palettes explored (Sunrise, Trailhead, Ember & Gold) were not chosen. Ember & Gold was noted as good for streak/PR/matched celebration moments.
 
-## Still TODO in tokens.ts
-- Light: `card`, `border`, `textMuted`, `tintAccent`, `tintSecondary`. Dark: `onAccent`.
-- **`danger` and `warn` in both modes.** Harbor has no red or warning tone, but the product needs one (Delete match, Report, Declined, weak GPS, Invited/pending). Don't reuse coral for destructive actions, since coral means "tap here". Check new values against the same contrast table. Decide before phase 3.
-- The type scale, spacing and radius scale (placeholders now).
-All of these come from the Harbor .docx, which isn't in the repo yet.
+## Tokens: two copies
+- **The real one** is `C:\dev\groundwork\src\theme\tokens.ts`: complete light and dark palettes, plus `danger`, `dangerTint`, `warn`, `warnTint` and a separate `onDanger` (brief §10.11). Note from that file: ink on the light danger fill fails AA (2.54:1), so `onDanger` uses the card color.
+- `junejoon-d/groundwork-app`'s `src/theme/tokens.ts` is an earlier stub with TODOs, written before the local repo was visible. Don't fill it by hand; replace it from the local file if that repo ever carries app code.
+- The Harbor doc is in `C:\dev\groundwork\docs\harbor-design-language.md`; brief §10 wins where they differ.
 
 ## Principles from the market scan
 - Semantic color (match, verification, report states) stays strictly functional, like Whoop. One warm, non-urgent brand accent, closer to Peanut or Strava than Tinder or Bumble.
@@ -38,5 +37,4 @@ All of these come from the Harbor .docx, which isn't in the repo yet.
 The public profile splits "Journey so far" (races, marathons, PR count) from a "Training profile" card: years training, short bio or philosophy, typical weekly volume, home neighborhood, preferred training times, trust badges, mutual clubs.
 
 ## Open
-- Fill the token TODOs and decide danger/warn before phase 3.
 - Iconography and motion defaults were recommended in the Harbor doc but not decided.
