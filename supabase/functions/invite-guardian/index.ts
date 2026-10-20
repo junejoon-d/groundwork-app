@@ -26,6 +26,7 @@ const CORS = {
 };
 
 const RESEND_COOLDOWN_MS = 10 * 60 * 1000;
+const MAX_INVITATIONS_EMAILED_PER_DAY = 5;
 
 /** SHA-256 hex, matching encode(sha256(...), 'hex') in migration 0002. */
 async function sha256Hex(value: string): Promise<string> {
@@ -112,7 +113,7 @@ Deno.serve(async (request) => {
 
   const { data: invitation } = await admin
     .from('guardian_invitations')
-    .select('id, guardian_first_name, guardian_email, email_sent_at, expires_at')
+    .select('id, guardian_first_name, guardian_email, expires_at')
     .eq('minor_user_id', user.id)
     .is('accepted_at', null)
     .is('superseded_at', null)
@@ -127,10 +128,18 @@ Deno.serve(async (request) => {
     });
   }
 
-  // The guardian address was typed by the minor, so resends are spaced out: the endpoint must not become a way
-  // to flood an inbox.
-  if (invitation.email_sent_at && Date.now() - new Date(invitation.email_sent_at).getTime() < RESEND_COOLDOWN_MS) {
-    return new Response(JSON.stringify({ error: 'We just sent that email. Please wait a few minutes before sending it again.' }), {
+  // The guardian address was typed by the minor, so sends are limited per minor, across every invitation they have
+  // made (a new guardian address makes a new invitation): the endpoint must not become a way to flood inboxes.
+  const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const { data: recentSends, error: sendsError } = await admin
+    .from('guardian_invitations')
+    .select('email_sent_at')
+    .eq('minor_user_id', user.id)
+    .gt('email_sent_at', dayAgo)
+    .order('email_sent_at', { ascending: false });
+  const lastSent = recentSends?.[0]?.email_sent_at ? new Date(recentSends[0].email_sent_at).getTime() : 0;
+  if (sendsError || Date.now() - lastSent < RESEND_COOLDOWN_MS || (recentSends?.length ?? 0) >= MAX_INVITATIONS_EMAILED_PER_DAY) {
+    return new Response(JSON.stringify({ error: 'We sent that email recently. Please wait a while before sending it again.' }), {
       status: 429,
       headers: { ...CORS, 'Content-Type': 'application/json' },
     });

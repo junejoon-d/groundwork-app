@@ -38,16 +38,16 @@ const PAGE = 1000;
 /**
  * Every object path under a folder, however deep (paths look like <auth id>/<log id>/<file>). Pages through each folder, and throws
  * rather than returning a partial list, so an account whose photos cannot all be found stays due instead of being erased around them.
+ * No depth limit: the person controls their own folder layout, and Storage's path length already bounds the nesting.
  */
-async function listAll(admin: Admin, prefix: string, depth = 0): Promise<string[]> {
-  if (depth > 4) throw new Error('storage folders nested deeper than expected');
+async function listAll(admin: Admin, prefix: string): Promise<string[]> {
   const out: string[] = [];
   for (let offset = 0; ; offset += PAGE) {
     const { data, error } = await admin.storage.from(BUCKET).list(prefix, { limit: PAGE, offset });
     if (error || !data) throw new Error('storage list failed');
     for (const entry of data) {
       const path = `${prefix}/${entry.name}`;
-      if (entry.id === null) out.push(...(await listAll(admin, path, depth + 1)));
+      if (entry.id === null) out.push(...(await listAll(admin, path)));
       else out.push(path);
     }
     if (data.length < PAGE) return out;
