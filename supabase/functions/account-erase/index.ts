@@ -33,29 +33,16 @@ const text = (status: number, body: unknown) => new Response(typeof body === 'st
 
 type Admin = ReturnType<typeof createClient>;
 
-const PAGE = 1000;
-
 /**
- * Every object path under a folder, however deep (paths look like <auth id>/<log id>/<file>). Pages through each folder, and throws
- * rather than returning a partial list, so an account whose photos cannot all be found stays due instead of being erased around them.
- * No depth limit: the person controls their own folder layout, and Storage's path length already bounds the nesting.
+ * Every object under the person's folder, however deep (paths look like <auth id>/<log id>/<file>), comes from one query
+ * (public.account_photo_paths) rather than a folder-by-folder walk, because the person controls their own folder layout. A failed
+ * lookup throws rather than returning a partial list, so an account whose photos cannot all be found stays due instead of being erased
+ * around them.
  */
-async function listAll(admin: Admin, prefix: string): Promise<string[]> {
-  const out: string[] = [];
-  for (let offset = 0; ; offset += PAGE) {
-    const { data, error } = await admin.storage.from(BUCKET).list(prefix, { limit: PAGE, offset });
-    if (error || !data) throw new Error('storage list failed');
-    for (const entry of data) {
-      const path = `${prefix}/${entry.name}`;
-      if (entry.id === null) out.push(...(await listAll(admin, path)));
-      else out.push(path);
-    }
-    if (data.length < PAGE) return out;
-  }
-}
-
 async function removePhotos(admin: Admin, authId: string): Promise<void> {
-  const paths = await listAll(admin, authId);
+  const { data, error } = await admin.rpc('account_photo_paths', { p_auth_id: authId });
+  if (error || !data) throw new Error('storage list failed');
+  const paths = data as string[];
   for (let i = 0; i < paths.length; i += 100) {
     const { error } = await admin.storage.from(BUCKET).remove(paths.slice(i, i + 100));
     if (error) throw new Error('storage remove failed');
