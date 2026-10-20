@@ -25,6 +25,8 @@ const CORS = {
   'Access-Control-Allow-Headers': 'authorization, content-type',
 };
 
+const RESEND_COOLDOWN_MS = 10 * 60 * 1000;
+
 /** SHA-256 hex, matching encode(sha256(...), 'hex') in migration 0002. */
 async function sha256Hex(value: string): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
@@ -110,7 +112,7 @@ Deno.serve(async (request) => {
 
   const { data: invitation } = await admin
     .from('guardian_invitations')
-    .select('id, guardian_first_name, guardian_email')
+    .select('id, guardian_first_name, guardian_email, email_sent_at, expires_at')
     .eq('minor_user_id', user.id)
     .is('accepted_at', null)
     .is('superseded_at', null)
@@ -118,9 +120,18 @@ Deno.serve(async (request) => {
     .limit(1)
     .maybeSingle();
 
-  if (!invitation) {
+  if (!invitation || (invitation.expires_at && new Date(invitation.expires_at).getTime() <= Date.now())) {
     return new Response(JSON.stringify({ error: 'No pending invitation for this account.' }), {
       status: 404,
+      headers: { ...CORS, 'Content-Type': 'application/json' },
+    });
+  }
+
+  // The guardian address was typed by the minor, so resends are spaced out: the endpoint must not become a way
+  // to flood an inbox.
+  if (invitation.email_sent_at && Date.now() - new Date(invitation.email_sent_at).getTime() < RESEND_COOLDOWN_MS) {
+    return new Response(JSON.stringify({ error: 'We just sent that email. Please wait a few minutes before sending it again.' }), {
+      status: 429,
       headers: { ...CORS, 'Content-Type': 'application/json' },
     });
   }
@@ -130,7 +141,8 @@ Deno.serve(async (request) => {
     .select('display_name')
     .eq('user_id', user.id)
     .maybeSingle();
-  const minorName = profile?.display_name ?? 'A young person you know';
+  // The name goes into the subject line, so keep it to one short line.
+  const minorName = (profile?.display_name ?? '').replace(/[\r\n\t]+/g, ' ').trim().slice(0, 60) || 'A young person you know';
 
   // Mint the token, store only its hash, and keep the plaintext for the messages alone.
   const token = crypto.randomUUID() + crypto.randomUUID().replaceAll('-', '');

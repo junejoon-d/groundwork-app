@@ -33,18 +33,25 @@ const text = (status: number, body: unknown) => new Response(typeof body === 'st
 
 type Admin = ReturnType<typeof createClient>;
 
-/** Every object path under a folder, however deep (paths look like <auth id>/<log id>/<file>). */
+const PAGE = 1000;
+
+/**
+ * Every object path under a folder, however deep (paths look like <auth id>/<log id>/<file>). Pages through each folder, and throws
+ * rather than returning a partial list, so an account whose photos cannot all be found stays due instead of being erased around them.
+ */
 async function listAll(admin: Admin, prefix: string, depth = 0): Promise<string[]> {
-  if (depth > 4) return [];
-  const { data, error } = await admin.storage.from(BUCKET).list(prefix, { limit: 1000 });
-  if (error || !data) throw new Error('storage list failed');
+  if (depth > 4) throw new Error('storage folders nested deeper than expected');
   const out: string[] = [];
-  for (const entry of data) {
-    const path = `${prefix}/${entry.name}`;
-    if (entry.id === null) out.push(...(await listAll(admin, path, depth + 1)));
-    else out.push(path);
+  for (let offset = 0; ; offset += PAGE) {
+    const { data, error } = await admin.storage.from(BUCKET).list(prefix, { limit: PAGE, offset });
+    if (error || !data) throw new Error('storage list failed');
+    for (const entry of data) {
+      const path = `${prefix}/${entry.name}`;
+      if (entry.id === null) out.push(...(await listAll(admin, path, depth + 1)));
+      else out.push(path);
+    }
+    if (data.length < PAGE) return out;
   }
-  return out;
 }
 
 async function removePhotos(admin: Admin, authId: string): Promise<void> {
@@ -57,7 +64,8 @@ async function removePhotos(admin: Admin, authId: string): Promise<void> {
 
 /** true = done (or nothing to do); false = a temporary problem, try again tomorrow. */
 async function redactSessions(admin: Admin, userId: string, stripeKey: string | undefined): Promise<boolean> {
-  const { data } = await admin.from('verification_records').select('provider_reference_id').eq('user_id', userId);
+  const { data, error } = await admin.from('verification_records').select('provider_reference_id').eq('user_id', userId);
+  if (error) return false; // a failed read is not "no sessions": wait rather than erase without redacting
   const ids = (data ?? []).map((r: { provider_reference_id: string }) => r.provider_reference_id);
   if (ids.length === 0) return true;
   if (!stripeKey) return false; // we cannot promise redaction without the key: wait rather than erase around it
