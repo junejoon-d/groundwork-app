@@ -25,6 +25,9 @@ const CORS = {
   'Access-Control-Allow-Headers': 'authorization, content-type',
 };
 
+const RESEND_COOLDOWN_MS = 10 * 60 * 1000;
+const MAX_SENDS_PER_DAY = 5;
+
 /** SHA-256 hex, matching encode(sha256(...), 'hex') in migration 0002. */
 async function sha256Hex(value: string): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
@@ -110,7 +113,7 @@ Deno.serve(async (request) => {
 
   const { data: invitation } = await admin
     .from('guardian_invitations')
-    .select('id, guardian_first_name, guardian_email')
+    .select('id, guardian_first_name, guardian_email, expires_at')
     .eq('minor_user_id', user.id)
     .is('accepted_at', null)
     .is('superseded_at', null)
@@ -118,9 +121,36 @@ Deno.serve(async (request) => {
     .limit(1)
     .maybeSingle();
 
-  if (!invitation) {
+  if (!invitation || (invitation.expires_at && new Date(invitation.expires_at).getTime() <= Date.now())) {
     return new Response(JSON.stringify({ error: 'No pending invitation for this account.' }), {
       status: 404,
+      headers: { ...CORS, 'Content-Type': 'application/json' },
+    });
+  }
+
+  // The guardian address was typed by the minor, so sends are limited per minor, across every invitation they have
+  // made: the endpoint must not become a way to flood inboxes. Claim a send slot first, then count, so two requests
+  // racing each other both see both claims and neither slips past the limit.
+  const { data: claim, error: claimError } = await admin
+    .from('guardian_email_sends')
+    .insert({ minor_user_id: user.id })
+    .select('id')
+    .single();
+  const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const { data: recentSends, error: sendsError } = claim
+    ? await admin
+        .from('guardian_email_sends')
+        .select('id, sent_at')
+        .eq('minor_user_id', user.id)
+        .gt('sent_at', dayAgo)
+        .order('sent_at', { ascending: false })
+    : { data: null, error: claimError };
+  const others = (recentSends ?? []).filter((s) => s.id !== claim?.id);
+  const lastOther = others[0] ? new Date(others[0].sent_at).getTime() : 0;
+  if (!claim || sendsError || Date.now() - lastOther < RESEND_COOLDOWN_MS || others.length >= MAX_SENDS_PER_DAY) {
+    if (claim) await admin.from('guardian_email_sends').delete().eq('id', claim.id);
+    return new Response(JSON.stringify({ error: 'We sent that email recently. Please wait a while before sending it again.' }), {
+      status: 429,
       headers: { ...CORS, 'Content-Type': 'application/json' },
     });
   }
@@ -130,7 +160,8 @@ Deno.serve(async (request) => {
     .select('display_name')
     .eq('user_id', user.id)
     .maybeSingle();
-  const minorName = profile?.display_name ?? 'A young person you know';
+  // The name goes into the subject line, so keep it to one short line.
+  const minorName = (profile?.display_name ?? '').replace(/[\r\n\t]+/g, ' ').trim().slice(0, 60) || 'A young person you know';
 
   // Mint the token, store only its hash, and keep the plaintext for the messages alone.
   const token = crypto.randomUUID() + crypto.randomUUID().replaceAll('-', '');
@@ -143,6 +174,8 @@ Deno.serve(async (request) => {
   const link = `${base}?token=${token}`;
 
   const emailSent = await sendEmail(invitation.guardian_email, minorName, link).catch(() => false);
+  // A send that never left does not use up the minor's allowance.
+  if (!emailSent) await admin.from('guardian_email_sends').delete().eq('id', claim.id);
 
   const now = new Date().toISOString();
   await admin
