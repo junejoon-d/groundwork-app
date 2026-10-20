@@ -1,0 +1,26 @@
+# Supabase CLI and branching config. Kept minimal on purpose: there is no [remotes] block, so preview
+# branches use these settings but production keeps the auth and API settings made in the dashboard.
+project_id = "groundwork-app"
+
+[db]
+major_version = 17
+
+[db.seed]
+enabled = false
+
+# Webhooks and database-triggered jobs prove themselves with a signature or shared secret, not a
+# Supabase JWT. Production has JWT checks off for exactly these five.
+[functions.stripe-webhook]
+verify_jwt = false
+
+[functions.spike-webhook]
+verify_jwt = false
+
+[functions.push-send]
+verify_jwt = false
+
+[functions.account-erase]
+verify_jwt = false
+
+[functions.guardian-sms-optin]
+verify_jwt = false
