@@ -16,6 +16,7 @@
 - Run `/clear` between unrelated tasks.
 - Ask before installing any skill, plugin or MCP server.
 - Phase-specific detail goes in `.claude/rules/` with `paths:` frontmatter, not in this file.
+- Project background, decisions and open items are in `docs/handoff/` (start at its README). Read the file for the area you're planning before you plan it.
 
 ## Design
 - All visual values come from `src/theme/tokens.ts` (Harbor). Rules: `.claude/rules/ui-design.md`.
